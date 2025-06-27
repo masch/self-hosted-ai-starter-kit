@@ -4,12 +4,10 @@ volumes:
   ollama_storage:
   qdrant_storage:
 
-networks:
-  demo:
-
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
-  networks: ['demo']
+  networks:
+    - app-network
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=postgres
@@ -26,7 +24,8 @@ x-n8n: &service-n8n
 x-ollama: &service-ollama
   image: ollama/ollama:latest
   container_name: ollama
-  networks: ['demo']
+  networks:
+    - app-network
   restart: unless-stopped
   ports:
     - 11434:11434
@@ -35,8 +34,9 @@ x-ollama: &service-ollama
 
 x-init-ollama: &init-ollama
   image: ollama/ollama:latest
-  networks: ['demo']
   container_name: ollama-pull-llama
+  networks:
+    - app-network
   volumes:
     - ollama_storage:/root/.ollama:rw,z
   entrypoint: /bin/sh
@@ -50,7 +50,8 @@ services:
   postgres:
     image: postgres:16-alpine
     hostname: postgres
-    networks: ['demo']
+    networks:
+      - app-network
     restart: unless-stopped
     environment:
       - POSTGRES_USER
@@ -87,6 +88,8 @@ services:
     <<: *service-n8n
     hostname: n8n
     container_name: n8n
+    networks:
+      - app-network
     restart: unless-stopped
     ports:
       - 5678:5678
@@ -95,8 +98,27 @@ services:
       - ./n8n/demo-data:/demo-data:rw,z
       - ./shared:/data/shared:rw,z
     environment:
-          - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-          - N8N_RUNNERS_ENABLED=true
+      # --- Configuraciones de Base de Datos y Claves ---
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_ENCRYPTION_KEY
+      - N8N_USER_MANAGEMENT_JWT_SECRET
+      
+      # --- Configuraciones del Proxy Inverso (AQUÍ ESTÁ LA SOLUCIÓN) ---
+      - N8N_PROTOCOL=https
+      - N8N_HOST=${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PATH=/n8n/
+      - WEBHOOK_URL=https://${DOMAIN_NAME}/
+      - N8N_EDITOR_BASE_URL=https://${DOMAIN_NAME}/n8n/
+
+      # --- Otras configuraciones ---
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,7 +129,8 @@ services:
     image: qdrant/qdrant
     hostname: qdrant
     container_name: qdrant
-    networks: ['demo']
+    networks:
+      - app-network
     restart: unless-stopped
     ports:
       - 6333:6333
@@ -155,3 +178,7 @@ services:
     image: ollama/ollama:rocm
     depends_on:
      - ollama-gpu-amd
+
+networks:
+  app-network:
+    external: true
