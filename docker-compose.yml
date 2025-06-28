@@ -10,7 +10,7 @@ x-n8n: &service-n8n
     - app-network
   environment:
     - DB_TYPE=postgresdb
-    - DB_POSTGRESDB_HOST=postgres
+    - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
     - DB_POSTGRESDB_USER=${POSTGRES_USER}
     - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
     - N8N_DIAGNOSTICS_ENABLED=false
@@ -71,6 +71,8 @@ services:
     <<: *service-n8n
     hostname: n8n
     container_name: n8n
+    networks:
+      - app-network
     restart: unless-stopped
     ports:
       - 5678:5678
@@ -79,8 +81,15 @@ services:
       - ./n8n/demo-data:/demo-data:rw,z
       - ./shared:/data/shared:rw,z
     environment:
+      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL}
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       - N8N_RUNNERS_ENABLED=true
+      - N8N_PROTOCOL=${N8N_PROTOCOL}
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=${N8N_PORT}
+      - N8N_PATH=${N8N_PATH}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
     entrypoint: /bin/sh
     command:
       - "-c"
