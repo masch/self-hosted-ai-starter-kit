@@ -3,6 +3,9 @@ volumes:
   postgres_storage:
   ollama_storage:
   qdrant_storage:
+  evolution_data:
+  evolution_store:
+  redis_storage:
 
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
@@ -97,6 +100,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      evolution-api:
+        condition: service_started
 
   qdrant:
     image: qdrant/qdrant
@@ -151,6 +156,50 @@ services:
     image: ollama/ollama:rocm
     depends_on:
      - ollama-gpu-amd
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    hostname: evolution-api
+    container_name: evolution-api
+    networks:
+      - app-network
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    shm_size: '2g'
+    volumes:
+      - evolution_data:/app/instances
+      - evolution_store:/app/store
+    environment:
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - SERVER_URL=${EVOLUTION_API_SERVER_URL}
+      - CONFIG_SESSION_PHONE_VERSION=${EVOLUTION_API_CONFIG_SESSION_PHONE_VERSION}
+      - LOG_LEVEL=${EVOLUTION_LOG_LEVEL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.2-alpine
+    hostname: redis
+    container_name: redis
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - redis_storage:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 networks:
   app-network:
